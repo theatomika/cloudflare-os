@@ -5,7 +5,6 @@
 
 import { DurableObject, type RpcStub } from "cloudflare:workers";
 // #if hooks
-// A separate import, so the template parses where it lies.
 import { restore } from "cloudflare:workers";
 // #endif
 import { validateRpc } from "capnweb-validate";

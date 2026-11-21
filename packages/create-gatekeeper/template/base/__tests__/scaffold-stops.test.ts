@@ -9,7 +9,7 @@ import { expect, it } from "vitest";
 // mark; delete this test once it passes. Deleting a mark alone rarely passes: the invented values
 // that can be told from real ones are looked for too. A status classification or a cache lifetime
 // cannot, so those marks are the only record that the decision is open.
-const INVENTED = /\bSTOP\(([a-z-]+)\)|\.example\b|"\/items\b|items\.read|items\.write|rename-items|X-Acme-Signature/;
+const INVENTED = /\bSTOP\(([a-z-]+)\)|\.example\b|\/items\b|items\.read|items\.write|rename-items|X-Acme-Signature/;
 
 it("has no decision left as the scaffold wrote it", () => {
   const src = join(import.meta.dirname, "..", "src");

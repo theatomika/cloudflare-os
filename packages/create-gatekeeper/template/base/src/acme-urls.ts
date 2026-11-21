@@ -2,6 +2,9 @@
 
 import { WEB_ORIGIN } from "./acme-env";
 
+// STOP(urls): The links a user pastes to name a resource, as the provider's web app writes them,
+// with its own IDs. The configurator frame holds a copy of this grammar
+// (configurator/acme-configurator-ui.tsx), which __tests__/configurator-url.test.ts keeps in step.
 /** An item ID as the provider writes it. */
 export const ITEM_ID = /^[A-Za-z0-9_-]+$/;
 

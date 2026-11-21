@@ -163,6 +163,8 @@ describe.each(VARIANTS)("scaffold with --auth $auth, hooks $hooks", ({ auth, hoo
       writeFileSync(types, hooks ? generated.replace(restore, `${restore}    export const restore: symbol;\n`) : generated);
 
       run(dir, process.execPath, tool("typescript", "bin/tsc"), "-p", dir);
+      // The configurator's copy of the link grammar agrees with the server's, as generated.
+      run(dir, process.execPath, tool("vitest", "vitest.mjs"), "run", "__tests__/configurator-url.test.ts");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -100,8 +100,9 @@ packages/gatekeeper-<name>/
 │   ├── <name>.ts                # HTTP entrypoint, Vendor, UserImpl, Verifier (the main module)
 │   ├── <name>-account.ts        # UserAccount Durable Object and the connect flow's routes
 │   ├── <name>-auth.ts           # How a user connects: endpoints, scopes, client
-│   ├── <name>-credentials.ts    # Identity, subresource IDs, the verifier's interface
-│   ├── <name>-env.ts            # Env, origins, resource types
+│   ├── <name>-credentials.ts    # Identity, the verifier's interface
+│   ├── <name>-env.ts            # Env, origins
+│   ├── <name>-resources.ts      # Resource types and URL patterns, subresource IDs
 │   ├── <name>-urls.ts           # Resource link parsing
 │   ├── <name>-api.ts            # The only module that talks HTTP to the provider
 │   ├── <name>-gatekeeper.ts     # GatekeeperImpl, the per-binding Durable Object
@@ -167,7 +168,7 @@ If you use this:
 - `resourceUrl()` returns the selected resource URL.
 - A module that can return several types reads `acceptedResourceUrlPatterns` from the context every callback receives (`render`, `isReady`, `resourceUrl`, `initialValuesFromResourceUrl`): the types Workshop will take, which leave out a grouped type the account hasn't granted and anything a blueprint binding doesn't want. Show other types if that helps the user find their way, but don't let them be chosen, and keep `isReady` false while one is. It is `undefined` from an older Workshop, which takes any type. The list is read when the frame starts, and Workshop restarts the frame when it changes.
 - `src/configurator/*-types.d.ts` describes the iframe-facing `ui` API.
-- Each module is compiled on its own: it may import only `@gadgets/configurator-ui` and types. URL grammar it shares with the server is copied, and a test keeps the copies in step.
+- Each module is compiled on its own: it may import only `@gadgets/configurator-ui` and types. URL grammar it shares with the server is copied, and a test keeps the copies in step (`__tests__/configurator-url.test.ts`, as the command writes it).
 - The frame's content security policy allows exactly the scripts the build wrote (by hash) and no network access; anything the UI needs goes through `ui`.
 - `scripts/build-gatekeeper-configurator.ts` generates `src/generated/*.txt`, using the runtime and build in `packages/configurator-ui` (`src/runtime/`, `build/`).
 - Nothing invokes `build-gatekeeper-configurator.ts` by hand. `vite.config.ts` re-exports the

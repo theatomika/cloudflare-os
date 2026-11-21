@@ -47,8 +47,8 @@ export type Names = {
 
 /**
  * The names for a provider.
- * @throws Error for a `name` that is not lowercase words joined by single hyphens, or a `display`
- * no identifier can be made from.
+ * @throws Error for a `name` that is not 1-20 lowercase letters and digits starting with a letter,
+ * or a `display` no identifier can be made from.
  */
 export function namesFor({ name, display }: Pick<ScaffoldOptions, "name" | "display">): Names {
   // The release's install slug rule (`releaseShortName`): the name is a binding and a route.
