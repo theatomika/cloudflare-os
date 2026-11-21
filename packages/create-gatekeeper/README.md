@@ -15,7 +15,7 @@ pnpm create-gatekeeper <name> --auth <oauth|api-key> [--hooks <app|subscription>
 | `--auth <kind>` | How a user connects: `oauth`, an authorization-code grant with PKCE, or `api-key`, a key the user pastes into the connect page. Required. |
 | `--hooks <kind>` | Event hooks fed by the provider's webhooks: `app`, one webhook for the deployment, or `subscription`, webhooks the gatekeeper adds through the provider's API. |
 | `--display <text>` | The provider's name as users read it. Defaults to `<name>`, capitalized. |
-| `--openapi <file>` | The provider's OpenAPI description, a local JSON file. The package's `generate:openapi` script pins it by hash, and the package keeps no copy: a description can be megabytes. Nothing is fetched. |
+| `--openapi <file>` | The provider's OpenAPI description, a local JSON or YAML file. The package's `generate:openapi` script pins it by hash, and the package keeps no copy: a description can be megabytes. Nothing is fetched. |
 | `--openapi-url <url>` | Where that description is published, an `https` URL, which the script then generates from. Without it the script takes the file as its argument. |
 | `--fetch` | Download the description from `--openapi-url`, in place of `--openapi`. The package is pinned to what the URL serves then, so give it a URL of one version, such as a file at a commit. |
 | `--keep-description` | Keep a copy of the description in the package, which the script generates from instead. |
@@ -42,8 +42,8 @@ command writes, what it leaves, and how the generated tests and hooks work.
   a later layer's file replaces an earlier one of the same path. The provider is `acme`, `Acme`,
   `ACME` and, in prose, `Acme Service`, renamed throughout: keep `Acme Service` on one line, and
   put no article before it, since which one depends on the provider's name. `// #if <feature>`,
-  `// #else` and `// #endif` lines keep a block for `hooks`, `hooks-app`, `hooks-subscription` or
-  `openapi`; blocks do not nest, and each file must parse as TypeScript where it lies.
+  `// #else` and `// #endif` lines keep a block for `hooks`, `hooks-app`, `hooks-subscription`,
+  `openapi` or `openapi-copy`; blocks do not nest, and each file must parse as TypeScript where it lies.
 
 `pnpm --filter @gadgets/create-gatekeeper test:run` generates a package for each variant, compiles
 it and runs its workerd suite, then runs a generated package's connect flow and hook driver in
