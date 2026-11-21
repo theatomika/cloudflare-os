@@ -15,7 +15,9 @@ pnpm create-gatekeeper <name> --auth <oauth|api-key> [--hooks <app|subscription>
 | `--auth <kind>` | How a user connects: `oauth`, an authorization-code grant with PKCE, or `api-key`, a key the user pastes into the connect page. Required. |
 | `--hooks <kind>` | Event hooks fed by the provider's webhooks: `app`, one webhook for the deployment, or `subscription`, webhooks the gatekeeper adds through the provider's API. |
 | `--display <text>` | The provider's name as users read it. Defaults to `<name>`, capitalized. |
-| `--openapi <file>` | The provider's OpenAPI description, a local JSON file. The package keeps a copy, pinned by hash. Nothing is fetched. |
+| `--openapi <file>` | The provider's OpenAPI description, a local JSON file. The package's `generate:openapi` script pins it by hash, and the package keeps no copy: a description can be megabytes. Nothing is fetched. |
+| `--openapi-url <url>` | With `--openapi`, where that description is published, an `https` URL, which the script then generates from. Without it the script takes the file as its argument. |
+| `--keep-description` | With `--openapi`, keep a copy of the description in the package, which the script generates from instead. |
 | `--operations <ids>` | With `--openapi`, the operations the gatekeeper calls, whose schema is generated now. Without it, the description's operations are printed to choose from. |
 | `--out <dir>` | Write the package there and register nothing: the way to try the command out. |
 | `--no-install` | Skip `pnpm install` and `pnpm types:generate` afterwards. |
