@@ -4,7 +4,6 @@
 import type { Schema } from "@gadgets/gatekeeper-kit/http";
 import type { WireItem, WireUser } from "./acme-api";
 // #if hooks-subscription
-// A separate import, so the template parses where it lies.
 import type { WireWebhook } from "./acme-api";
 // #endif
 import type { Api as Described } from "./openapi";
