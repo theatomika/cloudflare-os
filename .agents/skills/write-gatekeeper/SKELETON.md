@@ -4,14 +4,18 @@ A new gatekeeper starts from a command, not from copied code:
 
 ```bash
 pnpm create-gatekeeper <name> --auth <oauth|api-key> [--hooks] --display "<Provider Name>" \
-  [--openapi <description.json> [--operations <operationId>,<operationId>,...|<lines.jsonl>]]
+  [--openapi <description.json> [--operations <operationId>,<operationId>,...|<lines.jsonl>]
+    [--openapi-url <https url> | --keep-description]]
 ```
 
 `--auth oauth` is an authorization-code grant with PKCE; `--auth api-key` is a key the user pastes
 into the connect page, for a provider with no OAuth. `--hooks` adds event hooks fed by a webhook
 the provider delivers to. `--openapi` takes the provider's OpenAPI description as a local JSON
-file (nothing is fetched): the package keeps a copy as `openapi.json`, a `generate:openapi` script
-that pins it by hash, and `openapi-operations.jsonl`, the list the schema is generated for. With
+file (nothing is fetched): the package gets a `generate:openapi` script that pins it by hash, and
+`openapi-operations.jsonl`, the list the schema is generated for. A description can be megabytes,
+so the package keeps no copy: the script generates from `--openapi-url`, where the description is
+published, or with none takes the file as its argument. `--keep-description` keeps a copy as
+`openapi.json` instead. With
 `--operations` the list is filled and the schema is generated into `src/openapi/`, and the client
 calls through it; without, the command prints the description's operations, one JSON line each,
 to choose from. `--operations` also takes a file of those lines, which an id with a comma in it needs. To see them before making the package, run

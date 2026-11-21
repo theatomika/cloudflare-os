@@ -6,9 +6,9 @@ import type { WireItem, WireUser } from "./acme-api";
 import type { Api as Described } from "./openapi";
 
 // STOP(api): `Invented` is what the scaffold's own calls use, and no call of the provider's. The
-// provider's operations are `Described`, generated into src/openapi/ from openapi.json for the
+// provider's operations are `Described`, generated into src/openapi/ from its OpenAPI description for the
 // operations openapi-operations.jsonl lists. Move each call onto one of them, adding its line to
-// the list (`pnpm exec gatekeeper-openapi-schema openapi.json --list` prints them all) and running
+// the list (`pnpm exec gatekeeper-openapi-schema <description> --list` prints them all) and running
 // `pnpm generate:openapi`. Where the provider has an invented call's own method and path, such as
 // `GET /me`, delete the invented one first: a call cannot tell two operations of one path apart.
 // Then delete this file and import `Api` from "./openapi".

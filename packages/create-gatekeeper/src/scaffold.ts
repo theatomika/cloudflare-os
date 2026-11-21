@@ -15,9 +15,9 @@ export const AUTH_KINDS = ["oauth", "api-key"] as const;
  * The optional parts a template block can name: `openapi` is a package that has the provider's
  * OpenAPI description.
  */
-const FEATURES = ["hooks", "openapi"];
+const FEATURES = ["hooks", "openapi", "openapi-copy"];
 
-/** The provider's OpenAPI description, as a generated package keeps it. */
+/** The provider's OpenAPI description, in a generated package that keeps a copy. */
 export const OPENAPI_DOCUMENT = "openapi.json";
 /** The operations the package's schema is generated for, as JSON Lines. */
 export const OPENAPI_OPERATIONS = "openapi-operations.jsonl";
@@ -26,8 +26,16 @@ export const OPENAPI_SCHEMA_DIR = "src/openapi";
 
 /** The provider's OpenAPI description, and what was chosen and generated from it. */
 export type OpenApiOptions = {
-  /** The description's text, which the package keeps a copy of and pins by hash. */
+  /** The description's text, which the package pins by hash. */
   document: string;
+  /**
+   * Where the description is published, an `https` URL, which the package's script then generates
+   * from. Nothing is fetched here: the hash is the given text's, and a URL that serves another
+   * document fails the script.
+   */
+  url?: string;
+  /** Keeps a copy of the description in the package, which the script generates from instead. */
+  copy?: boolean;
   /**
    * The chosen operations, as the lines `gatekeeper-openapi-schema --list` prints for them, and
    * the schema files generated for them, by path within `OPENAPI_SCHEMA_DIR`. Left out when no
@@ -141,7 +149,9 @@ export function scaffold(options: ScaffoldOptions): Map<string, ScaffoldFile> {
   const { openapi } = options;
   // The entrypoint would be `src/openapi.ts`, which `./openapi` finds before the generated schema.
   if (openapi && names.name === "openapi") throw new Error('"openapi" names the generated schema\'s directory: use another name.');
-  const features = new Set([...(options.hooks ? ["hooks"] : []), ...(openapi ? ["openapi"] : [])]);
+  const features = new Set([
+    ...(options.hooks ? ["hooks"] : []), ...(openapi ? ["openapi"] : []), ...(openapi?.copy ? ["openapi-copy"] : []),
+  ]);
   // A package whose schema is generated calls through it: that layer replaces the invented schema.
   const layers = ["base", `auth-${options.auth}`, ...(options.hooks ? ["hooks"] : []), ...(openapi?.generated ? ["openapi-schema"] : [])];
   for (const layer of layers) {
@@ -163,18 +173,23 @@ export function scaffold(options: ScaffoldOptions): Map<string, ScaffoldFile> {
 }
 
 /**
- * Adds the provider's description, the list of chosen operations, the schema generated for them,
- * and the script that generates it again, which pins the description by its hash.
+ * Adds the list of chosen operations, the schema generated for them, and the script that generates
+ * it again. The script is the record of the description: it pins it by its hash, and names its
+ * URL or the package's copy. A description can be megabytes, so with neither the package holds
+ * none, and the script takes the file as its argument.
+ * @throws Error for a URL that is not `https`, or that a shell would not take as one word.
  */
-function addOpenApi(files: Map<string, ScaffoldFile>, { document, generated }: OpenApiOptions): void {
-  files.set(OPENAPI_DOCUMENT, { text: document });
+function addOpenApi(files: Map<string, ScaffoldFile>, { document, url, copy, generated }: OpenApiOptions): void {
+  if (url !== undefined && !/^https:\/\/[^\s"'`$\\]+$/.test(url)) throw new Error(`The description's URL must be an https one: ${url}`);
+  if (copy) files.set(OPENAPI_DOCUMENT, { text: document });
+  const source = copy ? `${OPENAPI_DOCUMENT} ` : url === undefined ? "" : `"${url}" `;
   files.set(OPENAPI_OPERATIONS, { text: generated?.operations ?? "" });
   for (const [path, text] of generated?.schema ?? []) files.set(`${OPENAPI_SCHEMA_DIR}/${path}`, { text });
 
   const manifest = files.get("package.json");
   if (!manifest || !("text" in manifest)) throw new Error("The template has no package.json.");
   const parsed = JSON.parse(manifest.text) as { scripts: Record<string, string> };
-  parsed.scripts["generate:openapi"] = `gatekeeper-openapi-schema ${OPENAPI_DOCUMENT} --out ${OPENAPI_SCHEMA_DIR} ` +
+  parsed.scripts["generate:openapi"] = `gatekeeper-openapi-schema ${source}--out ${OPENAPI_SCHEMA_DIR} ` +
     `--sha256 ${createHash("sha256").update(document).digest("hex")} --operations ${OPENAPI_OPERATIONS}`;
   files.set("package.json", { text: `${JSON.stringify(parsed, null, 2)}\n` });
 }

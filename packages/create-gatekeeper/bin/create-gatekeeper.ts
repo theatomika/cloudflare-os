@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { parseArgs } from "node:util";
 import {
-  AUTH_KINDS, OPENAPI_DOCUMENT, OPENAPI_OPERATIONS, namesFor, scaffold, stops,
+  AUTH_KINDS, OPENAPI_OPERATIONS, namesFor, scaffold, stops,
   type Names, type OpenApiOptions, type ScaffoldOptions,
 } from "../src/scaffold.ts";
 
@@ -24,9 +24,13 @@ Writes packages/gatekeeper-<name>, a gatekeeper built on gatekeeper-kit.
                      "api-key", a key the user pastes into the connect page.
   --hooks            Push events to gadgets, from a webhook the provider delivers to.
   --display <text>   The provider's name as users read it, e.g. "PagerDuty".
-  --openapi <file>   The provider's OpenAPI description, a JSON file. The package keeps a copy,
-                     pinned by its hash, and a script that generates the typed client's schema
-                     from it. Nothing is fetched.
+  --openapi <file>   The provider's OpenAPI description, a JSON file. The package gets a script
+                     that generates the typed client's schema from it, pinned by its hash, and
+                     no copy of it. Nothing is fetched.
+  --openapi-url <url>
+                     With --openapi, where that description is published, an https URL: the
+                     script then generates from there. Without it the script takes the file.
+  --keep-description With --openapi, keep a copy of the description in the package instead.
   --operations <ids> With --openapi, the operationIds the gatekeeper calls, separated by commas,
                      or a file of the lines printed for them: their schema is generated now.
                      Without it, the description's operations are printed to choose from, and
@@ -168,6 +172,8 @@ try {
       display: { type: "string" },
       hooks: { type: "boolean" },
       openapi: { type: "string" },
+      "openapi-url": { type: "string" },
+      "keep-description": { type: "boolean" },
       operations: { type: "string" },
       out: { type: "string" },
       "no-install": { type: "boolean" },
@@ -183,7 +189,12 @@ if (values.help) {
   process.exit(0);
 }
 if (positionals.length !== 1 || values.auth === undefined) fail(USAGE);
-if (values.operations !== undefined && values.openapi === undefined) fail(`--operations needs --openapi.\n\n${USAGE}`);
+for (const option of ["operations", "openapi-url", "keep-description"] as const) {
+  if (values[option] !== undefined && values.openapi === undefined) fail(`--${option} needs --openapi.\n\n${USAGE}`);
+}
+if (values["openapi-url"] !== undefined && values["keep-description"]) {
+  fail(`--keep-description generates from the package's copy, which leaves --openapi-url nothing to do.\n\n${USAGE}`);
+}
 
 let names: Names;
 let files: ReturnType<typeof scaffold>;
@@ -204,7 +215,8 @@ try {
       ? " If an earlier run was interrupted, delete it and run this again: registering twice is harmless." : ""));
   }
   if (values.openapi !== undefined) described = readOpenApi(values.openapi, values.operations);
-  files = scaffold({ ...options, openapi: described?.openapi });
+  const source = { url: values["openapi-url"], copy: values["keep-description"] };
+  files = scaffold({ ...options, openapi: described && { ...described.openapi, ...source } });
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }
@@ -228,7 +240,7 @@ if (values.out === undefined) {
 
 if (described?.openapi.generated) {
   console.log(`\nGenerated the schema of ${described.openapi.generated.operations.trimEnd().split("\n").length} operations ` +
-    `into src/openapi, from ${OPENAPI_DOCUMENT} and ${OPENAPI_OPERATIONS}. The scaffold's own calls are still invented:\n` +
+    `into src/openapi, from the description and ${OPENAPI_OPERATIONS}. The scaffold's own calls are still invented:\n` +
     `STOP(api) in src/${names.name}-api-schema.ts says how to move them onto the provider's.`);
 } else if (described) {
   console.log(`\nNo operation is chosen, so no schema is generated. The description has these ${described.listed.length}.
@@ -236,6 +248,10 @@ Put the lines of the ones the gatekeeper calls in ${OPENAPI_OPERATIONS}, then ru
 "pnpm --filter @gadgets/${names.name}-gatekeeper generate:openapi" and import the generated Api, as
 STOP(api) in src/${names.name}-api-schema.ts says:\n`);
   for (const line of described.listed) console.log(line);
+}
+if (described && !values["keep-description"] && values["openapi-url"] === undefined) {
+  console.log(`\nThe package keeps no copy of the description and knows no URL for it: generate:openapi takes the file,
+"pnpm --filter @gadgets/${names.name}-gatekeeper generate:openapi ${values.openapi}", and checks it by its hash.`);
 }
 
 const left = stops(files);

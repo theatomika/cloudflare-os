@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AUTH_KINDS, namesFor, resolveBlocks, scaffold, stops } from "../src/scaffold.ts";
+import { AUTH_KINDS, namesFor, resolveBlocks, scaffold, stops, type OpenApiOptions } from "../src/scaffold.ts";
 
 const pkg = join(import.meta.dirname, "..");
 const repo = join(pkg, "..", "..");
@@ -119,13 +119,39 @@ describe("scaffold with an OpenAPI description", () => {
     return file && "text" in file ? file.text : "";
   };
 
-  it("keeps the description, pinned by its hash, and an empty list until operations are chosen", () => {
-    const files = scaffold({ name: "acme", auth: "api-key", openapi: { document: '{"paths":{}}' } });
-    expect(text(files, "openapi.json")).toBe('{"paths":{}}');
+  const document = '{"paths":{}}';
+  const pinned = `--out src/openapi --sha256 ${createHash("sha256").update(document).digest("hex")} --operations openapi-operations.jsonl`;
+  const script = (openapi: Partial<OpenApiOptions>) => {
+    const files = scaffold({ name: "acme", auth: "api-key", openapi: { document, ...openapi } });
+    return { files, script: JSON.parse(text(files, "package.json")).scripts["generate:openapi"] as string };
+  };
+
+  // A description can be megabytes: the hash is the record, and the script is given the file.
+  it("pins the description by its hash and keeps no copy of it", () => {
+    const { files, script: generate } = script({});
+    expect(generate).toBe(`gatekeeper-openapi-schema ${pinned}`);
+    expect(files.has("openapi.json")).toBe(false);
+    expect(text(files, "README.md")).not.toContain("openapi.json");
+  });
+
+  it("generates from the description's URL where it has one", () => {
+    const url = "https://raw.example.com/acme/api/3f2a/openapi.json?raw=1&v=2";
+    expect(script({ url }).script).toBe(`gatekeeper-openapi-schema "${url}" ${pinned}`);
+    for (const refused of ["http://example.com/openapi.json", 'https://example.com/a"; rm -rf ~; "', "https://example.com/$(id)"]) {
+      expect(() => script({ url: refused })).toThrow("must be an https one");
+    }
+  });
+
+  it("keeps a copy of the description when asked, and generates from that", () => {
+    const { files, script: generate } = script({ copy: true });
+    expect(generate).toBe(`gatekeeper-openapi-schema openapi.json ${pinned}`);
+    expect(text(files, "openapi.json")).toBe(document);
+    expect(text(files, "README.md")).toContain("That is [`openapi.json`](openapi.json), the package's copy.");
+  });
+
+  it("has an empty list until operations are chosen", () => {
+    const files = scaffold({ name: "acme", auth: "api-key", openapi: { document } });
     expect(files.get("openapi-operations.jsonl")).toEqual({ text: "" });
-    expect(JSON.parse(text(files, "package.json")).scripts["generate:openapi"]).toBe(
-      "gatekeeper-openapi-schema openapi.json --out src/openapi " +
-      `--sha256 ${createHash("sha256").update('{"paths":{}}').digest("hex")} --operations openapi-operations.jsonl`);
     expect([...files.keys()].filter(path => path.startsWith("src/openapi/"))).toEqual([]);
     // Nothing is generated to import, so the client is the invented one.
     expect(text(files, "src/acme-api-schema.ts")).toContain('{ path: "/me"; response: WireUser }');
@@ -214,13 +240,17 @@ describe.each(VARIANTS)("scaffold with --auth $auth, hooks $hooks, openapi $open
         const generated = readFileSync(schema, "utf8");
         expect(generated).toContain('      path: "/users/{username}";');
         expect(generated).not.toContain("/attachments");
-        expect(readFileSync(join(dir, "openapi.json"), "utf8")).toBe(readFileSync(spec, "utf8"));
-        // The package's own script generates the same schema again, from its own copies.
+        expect(existsSync(join(dir, "openapi.json"))).toBe(false);
+        // The package's own script generates the same schema again, given the description.
         const script = (JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { scripts: Record<string, string> })
           .scripts["generate:openapi"].split(" ");
         expect(script[0]).toBe("gatekeeper-openapi-schema");
-        run(dir, process.execPath, openapiSchemaBin, ...script.slice(1));
+        run(dir, process.execPath, openapiSchemaBin, ...script.slice(1), spec);
         expect(readFileSync(schema, "utf8")).toBe(generated);
+        // And refuses another document, which the hash tells apart.
+        const other = join(root, "other.json");
+        writeFileSync(other, `${readFileSync(spec, "utf8")}\n`);
+        expect(() => run(dir, process.execPath, openapiSchemaBin, ...script.slice(1), other)).toThrow(/SHA-256/);
       }
       // This package depends on what a generated one does, so the generated one resolves from it.
       symlinkSync(join(pkg, "node_modules"), join(dir, "node_modules"));
