@@ -5,7 +5,8 @@ A new gatekeeper starts from a command, not from copied code:
 ```bash
 pnpm create-gatekeeper <name> --auth <oauth|api-key> [--hooks] --display "<Provider Name>" \
   [--openapi <description.json> [--operations <operationId>,<operationId>,...|<lines.jsonl>]
-    [--openapi-url <https url> | --keep-description]]
+    [--openapi-url <https url>] [--keep-description]]
+# or, in place of --openapi <description.json>:  --openapi-url <https url> --fetch
 ```
 
 `--auth oauth` is an authorization-code grant with PKCE; `--auth api-key` is a key the user pastes
@@ -15,7 +16,9 @@ file (nothing is fetched): the package gets a `generate:openapi` script that pin
 `openapi-operations.jsonl`, the list the schema is generated for. A description can be megabytes,
 so the package keeps no copy: the script generates from `--openapi-url`, where the description is
 published, or with none takes the file as its argument. `--keep-description` keeps a copy as
-`openapi.json` instead. With
+`openapi.json` instead. `--fetch` downloads the description from `--openapi-url`, with no local
+file: the package is pinned to what the URL serves at that moment, so use a URL of one version,
+such as a file at a commit, not one that moves. With
 `--operations` the list is filled and the schema is generated into `src/openapi/`, and the client
 calls through it; without, the command prints the description's operations, one JSON line each,
 to choose from. `--operations` also takes a file of those lines, which an id with a comma in it needs. To see them before making the package, run

@@ -4,6 +4,7 @@
 // repository lists gatekeepers by hand, and generates its Worker config and types.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
@@ -11,7 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { parseArgs } from "node:util";
 import {
-  AUTH_KINDS, OPENAPI_OPERATIONS, namesFor, scaffold, stops,
+  AUTH_KINDS, OPENAPI_DOCUMENT, OPENAPI_OPERATIONS, OPENAPI_URL, namesFor, scaffold, stops,
   type Names, type OpenApiOptions, type ScaffoldOptions,
 } from "../src/scaffold.ts";
 
@@ -28,9 +29,11 @@ Writes packages/gatekeeper-<name>, a gatekeeper built on gatekeeper-kit.
                      that generates the typed client's schema from it, pinned by its hash, and
                      no copy of it. Nothing is fetched.
   --openapi-url <url>
-                     With --openapi, where that description is published, an https URL: the
-                     script then generates from there. Without it the script takes the file.
-  --keep-description With --openapi, keep a copy of the description in the package instead.
+                     Where that description is published, an https URL: the script then
+                     generates from there. Without it the script takes the file.
+  --fetch            Download the description from --openapi-url, in place of --openapi. What it
+                     serves now is what the package is pinned to.
+  --keep-description Keep a copy of the description in the package, and generate from that.
   --operations <ids> With --openapi, the operationIds the gatekeeper calls, separated by commas,
                      or a file of the lines printed for them: their schema is generated now.
                      Without it, the description's operations are printed to choose from, and
@@ -118,6 +121,23 @@ function chosenLines(listed: string[], ids: string): string {
 }
 
 /**
+ * Downloads the description at `url` into `dir`, as the text the package's own script will read
+ * from there, so that the two hash alike.
+ * @returns The file's path.
+ * @throws Error for a URL that is not `https`, or that does not serve the description.
+ */
+async function fetchOpenApi(url: string, dir: string): Promise<string> {
+  if (!OPENAPI_URL.test(url)) throw new Error(`The description's URL must be an https one: ${url}`);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Fetching ${url} failed with status ${response.status}.`);
+  const text = await response.text();
+  const path = join(dir, OPENAPI_DOCUMENT);
+  writeFileSync(path, text);
+  console.log(`Fetched ${url}: ${Buffer.byteLength(text)} bytes, SHA-256 ${createHash("sha256").update(text).digest("hex")}.`);
+  return path;
+}
+
+/**
  * Reads the description at `path`, and with `ids`, generates the schema of the operations it
  * names: operationIds, or a file of their lines as listed, which an id with a comma in it needs.
  * Nothing of the package is written yet, so a description or an operation the generator refuses
@@ -173,6 +193,7 @@ try {
       hooks: { type: "boolean" },
       openapi: { type: "string" },
       "openapi-url": { type: "string" },
+      fetch: { type: "boolean" },
       "keep-description": { type: "boolean" },
       operations: { type: "string" },
       out: { type: "string" },
@@ -189,10 +210,16 @@ if (values.help) {
   process.exit(0);
 }
 if (positionals.length !== 1 || values.auth === undefined) fail(USAGE);
-for (const option of ["operations", "openapi-url", "keep-description"] as const) {
-  if (values[option] !== undefined && values.openapi === undefined) fail(`--${option} needs --openapi.\n\n${USAGE}`);
+const url = values["openapi-url"];
+if (values.fetch && (url === undefined || values.openapi !== undefined)) {
+  fail(`--fetch downloads the description from --openapi-url, in place of --openapi.\n\n${USAGE}`);
 }
-if (values["openapi-url"] !== undefined && values["keep-description"]) {
+for (const option of ["operations", "openapi-url", "keep-description"] as const) {
+  if (values[option] !== undefined && values.openapi === undefined && !values.fetch) {
+    fail(`--${option} needs --openapi, or --fetch to download the description.\n\n${USAGE}`);
+  }
+}
+if (url !== undefined && values["keep-description"] && !values.fetch) {
   fail(`--keep-description generates from the package's copy, which leaves --openapi-url nothing to do.\n\n${USAGE}`);
 }
 
@@ -200,6 +227,9 @@ let names: Names;
 let files: ReturnType<typeof scaffold>;
 let described: ReturnType<typeof readOpenApi> | undefined;
 let dir: string;
+const fetched = mkdtempSync(join(tmpdir(), "create-gatekeeper-fetched-"));
+// On any way out: a failure exits from where it is found.
+process.on("exit", () => rmSync(fetched, { recursive: true, force: true }));
 try {
   const options = { name: positionals[0], display: values.display, auth: values.auth as ScaffoldOptions["auth"], hooks: values.hooks };
   names = namesFor(options);
@@ -214,8 +244,9 @@ try {
     throw new Error(`${dir} already exists.` + (values.out === undefined
       ? " If an earlier run was interrupted, delete it and run this again: registering twice is harmless." : ""));
   }
-  if (values.openapi !== undefined) described = readOpenApi(values.openapi, values.operations);
-  const source = { url: values["openapi-url"], copy: values["keep-description"] };
+  const file = values.fetch ? await fetchOpenApi(url!, fetched) : values.openapi;
+  if (file !== undefined) described = readOpenApi(file, values.operations);
+  const source = { url, copy: values["keep-description"] };
   files = scaffold({ ...options, openapi: described && { ...described.openapi, ...source } });
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));

@@ -149,6 +149,19 @@ describe("scaffold with an OpenAPI description", () => {
     expect(text(files, "README.md")).toContain("That is [`openapi.json`](openapi.json), the package's copy.");
   });
 
+  // Each is refused before anything is fetched or written.
+  it.each([
+    [["--fetch"], "--fetch downloads the description from --openapi-url"],
+    [["--fetch", "--openapi-url", "https://example.com/a.json", "--openapi", "a.json"], "in place of --openapi"],
+    [["--fetch", "--openapi-url", "http://example.com/a.json"], "must be an https one"],
+    [["--openapi-url", "https://example.com/a.json"], "--openapi-url needs --openapi, or --fetch"],
+    [["--openapi", "a.json", "--openapi-url", "https://example.com/a.json", "--keep-description"], "leaves --openapi-url nothing to do"],
+  ])("refuses %j", (args, said) => {
+    const result = spawnSync(process.execPath, [bin, "acme", "--auth", "api-key", "--out", join(tmpdir(), "create-gatekeeper-refused"), ...args], { encoding: "utf8" });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(said);
+  });
+
   it("has an empty list until operations are chosen", () => {
     const files = scaffold({ name: "acme", auth: "api-key", openapi: { document } });
     expect(files.get("openapi-operations.jsonl")).toEqual({ text: "" });

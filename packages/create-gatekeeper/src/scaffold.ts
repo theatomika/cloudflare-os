@@ -19,6 +19,8 @@ const FEATURES = ["hooks", "openapi", "openapi-copy"];
 
 /** The provider's OpenAPI description, in a generated package that keeps a copy. */
 export const OPENAPI_DOCUMENT = "openapi.json";
+/** A description's URL: `https`, and one word to the shell the package's script runs in. */
+export const OPENAPI_URL = /^https:\/\/[^\s"'`$\\]+$/;
 /** The operations the package's schema is generated for, as JSON Lines. */
 export const OPENAPI_OPERATIONS = "openapi-operations.jsonl";
 /** Where the generated schema goes. */
@@ -34,7 +36,7 @@ export type OpenApiOptions = {
    * document fails the script.
    */
   url?: string;
-  /** Keeps a copy of the description in the package, which the script generates from instead. */
+  /** Keeps a copy of the description in the package, which the script generates from instead of `url`. */
   copy?: boolean;
   /**
    * The chosen operations, as the lines `gatekeeper-openapi-schema --list` prints for them, and
@@ -180,7 +182,7 @@ export function scaffold(options: ScaffoldOptions): Map<string, ScaffoldFile> {
  * @throws Error for a URL that is not `https`, or that a shell would not take as one word.
  */
 function addOpenApi(files: Map<string, ScaffoldFile>, { document, url, copy, generated }: OpenApiOptions): void {
-  if (url !== undefined && !/^https:\/\/[^\s"'`$\\]+$/.test(url)) throw new Error(`The description's URL must be an https one: ${url}`);
+  if (url !== undefined && !OPENAPI_URL.test(url)) throw new Error(`The description's URL must be an https one: ${url}`);
   if (copy) files.set(OPENAPI_DOCUMENT, { text: document });
   const source = copy ? `${OPENAPI_DOCUMENT} ` : url === undefined ? "" : `"${url}" `;
   files.set(OPENAPI_OPERATIONS, { text: generated?.operations ?? "" });
