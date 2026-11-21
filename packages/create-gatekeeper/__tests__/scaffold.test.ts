@@ -76,6 +76,14 @@ describe("scaffold", () => {
     expect(ids.slice(0, 3)).toEqual(["session-api", "resources", "subresources"]);
   });
 
+  // What an operator and a reader see is invented too, and the generated test looks there.
+  it("marks the README, the logo and an OAuth app's setup steps", () => {
+    const marked = (auth: "oauth" | "api-key") => stops(scaffold({ name: "acme", auth }))
+      .filter(({ path }) => !/\.tsx?$/.test(path)).map(({ path, id }) => `${path} ${id}`).toSorted();
+    expect(marked("api-key")).toEqual(["README.md readme", "src/acme-logo.svg logo"]);
+    expect(marked("oauth")).toEqual(["README.md readme", "deploy-inputs.json deploy-inputs", "src/acme-logo.svg logo"]);
+  });
+
   // A page that sends no referrer posts its forms with `Origin: null`, which the submission's
   // cross-site check refuses: the form would never submit.
   it("serves the key form so that its submission names its origin", () => {

@@ -12,17 +12,18 @@ import { expect, it } from "vitest";
 const INVENTED = /\bSTOP\(([a-z-]+)\)|\.example\b|\/items\b|items\.read|items\.write|rename-items|X-Acme-Signature/;
 
 it("has no decision left as the scaffold wrote it", () => {
-  const src = join(import.meta.dirname, "..", "src");
-  const stops = readdirSync(src, { recursive: true, withFileTypes: true })
-    .filter(entry => entry.isFile() && /\.(ts|tsx)$/.test(entry.name))
+  const root = join(import.meta.dirname, "..");
+  const src = join(root, "src");
+  const sources = readdirSync(src, { recursive: true, withFileTypes: true })
+    .filter(entry => entry.isFile() && /\.(ts|tsx|svg)$/.test(entry.name))
 // #if openapi
     // Generated from the provider's description, whose own words are not the scaffold's to judge.
     .filter(entry => !entry.parentPath.startsWith(join(src, "openapi")))
 // #endif
-    .flatMap(entry => {
-      const path = join(entry.parentPath, entry.name);
-      return readFileSync(path, "utf8").split("\n")
-        .flatMap((line, index) => INVENTED.test(line) ? [`${path.slice(src.length + 1)}:${index + 1} ${line.trim()}`] : []);
-    });
+    .map(entry => join(entry.parentPath, entry.name));
+  // What an operator and a reader see of the package is the scaffold's too, until it is rewritten.
+  const stops = [...sources, join(root, "README.md"), join(root, "deploy-inputs.json")].flatMap(path =>
+    readFileSync(path, "utf8").split("\n")
+      .flatMap((line, index) => INVENTED.test(line) ? [`${path.slice(root.length + 1)}:${index + 1} ${line.trim()}`] : []));
   expect(stops).toEqual([]);
 });

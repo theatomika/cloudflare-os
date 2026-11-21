@@ -87,6 +87,7 @@ are marked, and a provider with organizations or workspaces needs the tenant in 
 | `src/<name>-hook-driver.ts` (`--hooks`) | webhook route, hook driver and controller | `webhook-source`; `webhook-tenant` (`app`); `webhook-subscription`, `webhook-upkeep` (`subscription`) |
 | `src/<name>.ts` | HTTP entrypoint, vendor, account entrypoint, verifier | `vendor-description` |
 | `src/configurator/` | the resource configurator frame | `configurator` |
+| `README.md`, `deploy-inputs.json` (OAuth), `src/<name>-logo.svg` | what a reader, a deploying operator and the Workshop show of it | `readme`, `deploy-inputs`, `logo` |
 
 Still by hand afterwards: the gatekeeper's row in `docs/observers.md`, its README, its
 `deploy-inputs.json` setup steps, and the rest of its tests (below).
