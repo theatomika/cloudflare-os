@@ -9,10 +9,10 @@ import {
   existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
-  AUTH_KINDS, OPENAPI_DOCUMENT, OPENAPI_OPERATIONS, OPENAPI_URL, namesFor, scaffold, stops,
+  AUTH_KINDS, OPENAPI_OPERATIONS, OPENAPI_URL, namesFor, openApiDocument, openApiUrlRefusal, scaffold, stops,
   type Names, type OpenApiOptions, type ScaffoldOptions,
 } from "../src/scaffold.ts";
 
@@ -25,7 +25,7 @@ Writes packages/gatekeeper-<name>, a gatekeeper built on gatekeeper-kit.
                      "api-key", a key the user pastes into the connect page.
   --hooks            Push events to gadgets, from a webhook the provider delivers to.
   --display <text>   The provider's name as users read it, e.g. "PagerDuty".
-  --openapi <file>   The provider's OpenAPI description, a JSON file. The package gets a script
+  --openapi <file>   The provider's OpenAPI description, a JSON or YAML file. The package gets a script
                      that generates the typed client's schema from it, pinned by its hash, and
                      no copy of it. Nothing is fetched.
   --openapi-url <url>
@@ -121,17 +121,21 @@ function chosenLines(listed: string[], ids: string): string {
 }
 
 /**
- * Downloads the description at `url` into `dir`, as the text the package's own script will read
- * from there, so that the two hash alike.
+ * Downloads the description at `url` into a directory of its own, removed on exit, as the text
+ * the package's own script will read from there, so that the two hash alike.
  * @returns The file's path.
- * @throws Error for a URL that is not `https`, or that does not serve the description.
+ * @throws Error for a URL that is not `https`, that names a user or password, or that does not
+ * serve the description.
  */
-async function fetchOpenApi(url: string, dir: string): Promise<string> {
-  if (!OPENAPI_URL.test(url)) throw new Error(`The description's URL must be an https one: ${url}`);
+async function fetchOpenApi(url: string): Promise<string> {
+  if (!OPENAPI_URL.test(url)) throw new Error(openApiUrlRefusal(url));
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Fetching ${url} failed with status ${response.status}.`);
   const text = await response.text();
-  const path = join(dir, OPENAPI_DOCUMENT);
+  const dir = mkdtempSync(join(tmpdir(), "create-gatekeeper-fetched-"));
+  // On any way out: a failure exits from where it is found.
+  process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, openApiDocument(text));
   writeFileSync(path, text);
   console.log(`Fetched ${url}: ${Buffer.byteLength(text)} bytes, SHA-256 ${createHash("sha256").update(text).digest("hex")}.`);
   return path;
@@ -227,9 +231,6 @@ let names: Names;
 let files: ReturnType<typeof scaffold>;
 let described: ReturnType<typeof readOpenApi> | undefined;
 let dir: string;
-const fetched = mkdtempSync(join(tmpdir(), "create-gatekeeper-fetched-"));
-// On any way out: a failure exits from where it is found.
-process.on("exit", () => rmSync(fetched, { recursive: true, force: true }));
 try {
   const options = { name: positionals[0], display: values.display, auth: values.auth as ScaffoldOptions["auth"], hooks: values.hooks };
   names = namesFor(options);
@@ -244,7 +245,7 @@ try {
     throw new Error(`${dir} already exists.` + (values.out === undefined
       ? " If an earlier run was interrupted, delete it and run this again: registering twice is harmless." : ""));
   }
-  const file = values.fetch ? await fetchOpenApi(url!, fetched) : values.openapi;
+  const file = values.fetch ? await fetchOpenApi(url!) : values.openapi;
   if (file !== undefined) described = readOpenApi(file, values.operations);
   const source = { url, copy: values["keep-description"] };
   files = scaffold({ ...options, openapi: described && { ...described.openapi, ...source } });
@@ -282,7 +283,10 @@ STOP(api) in src/${names.name}-api-schema.ts says:\n`);
 }
 if (described && !values["keep-description"] && values["openapi-url"] === undefined) {
   console.log(`\nThe package keeps no copy of the description and knows no URL for it: generate:openapi takes the file,
-"pnpm --filter @gadgets/${names.name}-gatekeeper generate:openapi ${values.openapi}", and checks it by its hash.`);
+"pnpm --filter @gadgets/${names.name}-gatekeeper generate:openapi ${relative(dir, resolve(values.openapi!))}", and checks it by its hash.`);
+}
+if (described && url?.includes("?")) {
+  console.log("\nThe URL's query string is now in package.json's generate:openapi script: commit it only if it carries no token.");
 }
 
 const left = stops(files);

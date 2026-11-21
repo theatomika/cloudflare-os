@@ -12,11 +12,11 @@ pnpm create-gatekeeper <name> --auth <oauth|api-key> [--hooks] --display "<Provi
 `--auth oauth` is an authorization-code grant with PKCE; `--auth api-key` is a key the user pastes
 into the connect page, for a provider with no OAuth. `--hooks` adds event hooks fed by a webhook
 the provider delivers to. `--openapi` takes the provider's OpenAPI description as a local JSON
-file (nothing is fetched): the package gets a `generate:openapi` script that pins it by hash, and
+or YAML file (nothing is fetched): the package gets a `generate:openapi` script that pins it by hash, and
 `openapi-operations.jsonl`, the list the schema is generated for. A description can be megabytes,
 so the package keeps no copy: the script generates from `--openapi-url`, where the description is
 published, or with none takes the file as its argument. `--keep-description` keeps a copy as
-`openapi.json` instead. `--fetch` downloads the description from `--openapi-url`, with no local
+`openapi.json` or `openapi.yaml` instead. `--fetch` downloads the description from `--openapi-url`, with no local
 file: the package is pinned to what the URL serves at that moment, so use a URL of one version,
 such as a file at a commit, not one that moves. With
 `--operations` the list is filled and the schema is generated into `src/openapi/`, and the client

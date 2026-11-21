@@ -137,7 +137,9 @@ describe("scaffold with an OpenAPI description", () => {
   it("generates from the description's URL where it has one", () => {
     const url = "https://raw.example.com/acme/api/3f2a/openapi.json?raw=1&v=2";
     expect(script({ url }).script).toBe(`gatekeeper-openapi-schema "${url}" ${pinned}`);
-    for (const refused of ["http://example.com/openapi.json", 'https://example.com/a"; rm -rf ~; "', "https://example.com/$(id)"]) {
+    // The last would put a password in a committed file.
+    for (const refused of ["http://example.com/openapi.json", 'https://example.com/a"; rm -rf ~; "', "https://example.com/$(id)",
+      "https://user:secret@example.com/openapi.json"]) {
       expect(() => script({ url: refused })).toThrow("must be an https one");
     }
   });
@@ -147,6 +149,11 @@ describe("scaffold with an OpenAPI description", () => {
     expect(generate).toBe(`gatekeeper-openapi-schema openapi.json ${pinned}`);
     expect(text(files, "openapi.json")).toBe(document);
     expect(text(files, "README.md")).toContain("That is [`openapi.json`](openapi.json), the package's copy.");
+
+    const yaml = scaffold({ name: "acme", auth: "api-key", openapi: { document: "paths: {}\n", copy: true } });
+    expect(JSON.parse(text(yaml, "package.json")).scripts["generate:openapi"]).toMatch(/^gatekeeper-openapi-schema openapi\.yaml /);
+    expect(text(yaml, "openapi.yaml")).toBe("paths: {}\n");
+    expect(text(yaml, "README.md")).toContain("That is [`openapi.yaml`](openapi.yaml), the package's copy.");
   });
 
   // Each is refused before anything is fetched or written.
