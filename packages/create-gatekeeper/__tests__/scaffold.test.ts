@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AUTH_KINDS, namesFor, resolveBlocks, scaffold, stops, type OpenApiOptions } from "../src/scaffold.ts";
+import { AUTH_KINDS, namesFor, resolveBlocks, scaffold, stops, withLine, type OpenApiOptions } from "../src/scaffold.ts";
 
 const pkg = join(import.meta.dirname, "..");
 const repo = join(pkg, "..", "..");
@@ -96,6 +96,22 @@ describe("scaffold", () => {
     expect(ask).toBeGreaterThan(check);
     expect(claim).toBeGreaterThan(ask);
     expect(text).toContain('if ("retry" in result) return keyFormResponse(env, path[0], formNonce, result.retry);');
+  });
+});
+
+describe("withLine", () => {
+  const listed = /^\* \[/;
+  const list = "# List\n* [Alpha]\n* [Gamma]\n\nMore.";
+
+  it("adds a line after the last of its kind, or with sorted, where the alphabet puts it", () => {
+    expect(withLine(list, listed, "* [beta]")).toBe("# List\n* [Alpha]\n* [Gamma]\n* [beta]\n\nMore.");
+    expect(withLine(list, listed, "* [beta]", true)).toBe("# List\n* [Alpha]\n* [beta]\n* [Gamma]\n\nMore.");
+    expect(withLine(list, listed, "* [Zeta]", true)).toBe("# List\n* [Alpha]\n* [Gamma]\n* [Zeta]\n\nMore.");
+  });
+
+  it("adds a line once, and none where there is no line of its kind", () => {
+    expect(withLine(list, listed, "* [Gamma]", true)).toBe(list);
+    expect(withLine("# List", listed, "* [beta]")).toBeUndefined();
   });
 });
 
@@ -229,6 +245,8 @@ describe.each(VARIANTS)("scaffold with --auth $auth, hooks $hooks, openapi $open
   it("renames the template's provider everywhere", () => {
     for (const [path, file] of files) {
       expect(`${path}\n${"text" in file ? file.text : file.symlink}`).not.toMatch(/acme|\/\/ #(if|else|endif)/i);
+      // No article comes before the name, since which one depends on the name: "an Home Assistant".
+      expect("text" in file ? file.text : "").not.toMatch(/\b(a|an) Home Assistant/i);
     }
     expect([...files.keys()]).toContain("src/homeassistant.ts");
   });
@@ -242,15 +260,18 @@ describe.each(VARIANTS)("scaffold with --auth $auth, hooks $hooks, openapi $open
     expect(text.includes("/items/{id}/webhooks")).toBe(hooks === "subscription");
     expect(text.includes("WEBHOOK_SECRET")).toBe(hooks === "app");
     expect(text.includes("WEBHOOK_ORIGIN")).toBe(hooks === "subscription");
+    // Either driver hands a delivery's headers on, for a provider that says the event's type there.
+    expect(/parseDelivery\(body, (request\.)?headers\)/.test(text)).toBe(hooks !== undefined);
   });
 
   it("marks what is left to decide", () => {
     expect(stops(files).map(({ id }) => id)).toEqual(expect.arrayContaining(["session-api", "resources", "subresources", "actions"]));
   });
 
-  // Runs wrangler and the compiler over a generated package, which takes some seconds. The package
-  // is laid out beside symlinks to the packages it names by path, as it would be in `packages/`.
-  it("generates a package that compiles", { timeout: 180_000 }, () => {
+  // Runs wrangler, the compiler and the package's own workerd suite over a generated package,
+  // which takes some seconds. The package is laid out beside symlinks to the packages it names by
+  // path, as it would be in `packages/`.
+  it("generates a package that compiles, and whose workerd suite passes", { timeout: 180_000 }, () => {
     const root = mkdtempSync(join(tmpdir(), "create-gatekeeper-"));
     try {
       const dir = join(root, "packages", "gatekeeper-homeassistant2");
@@ -304,6 +325,12 @@ describe.each(VARIANTS)("scaffold with --auth $auth, hooks $hooks, openapi $open
       run(dir, process.execPath, tool("typescript", "bin/tsc"), "-p", dir);
       // The configurator's copy of the link grammar agrees with the server's, as generated.
       run(dir, process.execPath, tool("vitest", "vitest.mjs"), "run", "__tests__/configurator-url.test.ts");
+
+      // The configurator frame, which a build makes and the Worker's main module imports.
+      mkdirSync(join(dir, "src", "generated"));
+      writeFileSync(join(dir, "src", "generated", "homeassistant-configurator-ui.txt"), "<!DOCTYPE html>");
+      expect(run(dir, process.execPath, tool("vitest", "vitest.mjs"), "run", "-c", "vitest.worker.config.ts"))
+        .toMatch(/Tests {2}1 passed \(1\)/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

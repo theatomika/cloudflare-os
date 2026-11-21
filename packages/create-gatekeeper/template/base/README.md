@@ -1,6 +1,6 @@
 # Gatekeeper Acme Service
 
-Connects an Acme Service account so gadgets can read its items and, once the user approves, rename
+Connects Acme Service accounts so gadgets can read their items and, once the user approves, rename
 them.
 
 `pnpm create-gatekeeper` wrote this package. Wherever only the provider's documentation can say
