@@ -214,6 +214,11 @@ function inlinePathItems(document: JsonObject): void {
   }
 }
 
+/** The array index a JSON Pointer token names, or NaN: digits only, with no leading zero. */
+function arrayIndex(token: string): number {
+  return /^(0|[1-9]\d*)$/.test(token) ? Number(token) : NaN;
+}
+
 /**
  * Applies a JSON Patch (RFC 6902) to `document`: its `add`, `replace` and `remove` operations, in
  * order. Any other operation, or a path that does not resolve, stops the run.
@@ -234,16 +239,16 @@ function applyPatch(document: JsonObject, patch: Json, file: string): void {
     const last = keys.pop()!;
     let parent: Json | undefined = document;
     for (const key of keys) {
-      parent = Array.isArray(parent) ? parent[Number(key)] : isObject(parent) ? parent[key] : undefined;
+      parent = Array.isArray(parent) ? parent[arrayIndex(key)] : isObject(parent) ? parent[key] : undefined;
     }
     if (!Array.isArray(parent) && !isObject(parent)) fail(`${where}: nothing at ${path}'s parent`);
-    const exists = Array.isArray(parent) ? Number(last) < parent.length : Object.hasOwn(parent, last);
+    const exists = Array.isArray(parent) ? arrayIndex(last) < parent.length : Object.hasOwn(parent, last);
     if (op !== "add" && !exists) fail(`${where}: nothing at ${path} to ${op}`);
     if (op !== "remove" && !("value" in operation)) fail(`${where} needs a value`);
     if (op !== "add" && op !== "replace" && op !== "remove") fail(`${where}: op ${op} is not add, replace or remove`);
     if (Array.isArray(parent)) {
-      const at = last === "-" ? parent.length : Number(last);
-      if (!Number.isInteger(at) || at < 0 || at > parent.length) fail(`${where}: ${path} is not an index`);
+      const at = last === "-" ? parent.length : arrayIndex(last);
+      if (Number.isNaN(at) || at > parent.length) fail(`${where}: ${path} is not an index`);
       if (op === "add") parent.splice(at, 0, operation.value!);
       else if (op === "replace") parent[at] = operation.value!;
       else parent.splice(at, 1);
@@ -269,6 +274,8 @@ function readOperations(file: string): Map<string, JsonObject> {
     if (!isObject(operation) || typeof operation.operationId !== "string" || operation.operationId === "") {
       fail(`${file} line ${index + 1} needs an operationId`);
     }
+    // The later line would replace the earlier one, unchecked against the document.
+    if (listed.has(operation.operationId)) fail(`${file} line ${index + 1} lists ${operation.operationId} again`);
     listed.set(operation.operationId, operation);
   });
   return listed;
@@ -499,11 +506,15 @@ function forgeWords(name: string): string {
     .split(/[^a-z0-9]+/).filter(Boolean).join(" ");
 }
 
-/** Builds the plugin component, unless one built from the same sources is cached. */
+/**
+ * Builds the plugin component, unless one built from the same sources is cached. Forge's half of
+ * the component is a source too: a pinned build can change it and keep its version.
+ */
 function buildPlugin(): string {
   const sources = ["forge/plugin.ts", "forge/emit.ts"].map(path => join(kitDir, path));
+  const forge = [...filesIn(join(forgeDir, "plugin")).toSorted(), join(forgeDir, "package.json")];
   const hash = createHash("sha256");
-  for (const path of [...sources, join(forgeDir, "package.json")]) hash.update(readFileSync(path));
+  for (const path of [...sources, ...forge]) hash.update(readFileSync(path));
   const cacheDir = join(kitDir, "node_modules", ".cache", "openapi-schema");
   const wasm = join(cacheDir, `plugin-${hash.digest("hex").slice(0, 16)}.wasm`);
   if (existsSync(wasm)) return wasm;

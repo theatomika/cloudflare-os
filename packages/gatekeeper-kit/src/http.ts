@@ -204,7 +204,9 @@ export function createOpenAPIClient<const S extends Schema>(options: OpenAPIClie
  * paths under that prefix; a parameter of the same name in a path under another prefix is the
  * caller's to pass. The types are a convenience and the checks made on each call are the boundary:
  * the result throws for a path outside every prefix, and for a call that passes another value for
- * a fixed parameter. It reads `scope` once, when it is made. Scoping the result again narrows it
+ * a fixed parameter. Nothing checks the method, or that the schema has the path: a schema is only a
+ * type, so the result sends any method to any path under a prefix, and is no way to grant
+ * read-only access. It reads `scope` once, when it is made. Scoping the result again narrows it
  * further.
  *
  * This covers paths only. Where an operation takes the organization or project in its query or

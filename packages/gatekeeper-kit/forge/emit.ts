@@ -71,11 +71,12 @@ function emitGroup(group: Group, names: ModelNames): File {
 
   for (const model of group.models) {
     docComment(f, "", model.description, model.deprecated);
-    printBlock(f, "", [["export type ", names.name(model, "response"), " = "]],
+    // Declared names are identifiers, so that Forge aliases an import of the same name.
+    printBlock(f, "", [["export type ", names.ref(model, "response"), " = "]],
       printer.type(model.type, "response"), ";");
     if (names.needsRequestType(model)) {
       f(`/** {@link ${names.name(model, "response")}} as a request sends it, without its \`readOnly\` fields. */`);
-      printBlock(f, "", [["export type ", names.name(model, "request"), " = "]],
+      printBlock(f, "", [["export type ", names.ref(model, "request"), " = "]],
         printer.type(model.type, "request"), ";");
     }
     f();
@@ -85,7 +86,7 @@ function emitGroup(group: Group, names: ModelNames): File {
     f.doc(
       `The ${group.path.length === 0 ? "ungrouped" : `\`${group.path.join(".")}\``} operations, ` +
       "as a schema for `createOpenAPIClient` from `@gadgets/gatekeeper-kit/http`.");
-    f("export type ", names.apiName(group), " = {");
+    f("export type ", f.ident(names.apiName(group)), " = {");
     for (const verb of METHODS) {
       const blocks = operations.get(verb);
       if (!blocks) continue;
@@ -421,7 +422,9 @@ function scalar(type: Extract<Type, { kind: "scalar" }>): string {
 
 function needsParens(type: Type): boolean {
   return type.kind === "union" || type.kind === "intersection" ||
-    (type.kind === "enum" && type.values.length > 1);
+    (type.kind === "enum" && type.values.length > 1) ||
+    // Printed as an intersection: fields beside an index signature.
+    (type.kind === "object" && type.fields.length > 0 && type.extra !== undefined);
 }
 
 function key(name: string): string {

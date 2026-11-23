@@ -126,6 +126,17 @@ describe("gatekeeper-openapi-schema", { timeout: 120_000 }, () => {
       const unexplained = generate(join(fixture, "spec.json"), out, "--patch", join(dir, "patch.json"));
       expect(unexplained.status).toBe(1);
       expect(unexplained.stderr).toContain("operation 0 needs a reason");
+
+      // An empty token is no index, though as a number it is 0.
+      for (const [op, path, said] of [
+        ["replace", "/components/schemas/simple-user/required/", "nothing at /components/schemas/simple-user/required/ to replace"],
+        ["add", "/components/schemas/simple-user/required/01", "/components/schemas/simple-user/required/01 is not an index"],
+      ]) {
+        writeFileSync(join(dir, "patch.json"), JSON.stringify([{ op, path, value: "name", reason: "Tests an index." }]));
+        const malformed = generate(join(fixture, "spec.json"), out, "--patch", join(dir, "patch.json"));
+        expect(malformed.status).toBe(1);
+        expect(malformed.stderr).toContain(said);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -180,6 +191,11 @@ describe("gatekeeper-openapi-schema", { timeout: 120_000 }, () => {
       const text = generate(join(fixture, "spec.json"), out, "--operations", join(dir, "ops.jsonl"));
       expect(text.status).toBe(1);
       expect(text.stderr).toContain("ops.jsonl line 1 is not JSON");
+
+      writeFileSync(join(dir, "ops.jsonl"), `${chosen[0].replace("/users/{username}", "/people/{username}")}\n${chosen[0]}\n`);
+      const twice = generate(join(fixture, "spec.json"), out, "--operations", join(dir, "ops.jsonl"));
+      expect(twice.status).toBe(1);
+      expect(twice.stderr).toContain("ops.jsonl line 2 lists users/get again");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -415,6 +431,14 @@ describe("gatekeeper-openapi-schema", { timeout: 120_000 }, () => {
           "/blob": { post: { operationId: "blob/post", requestBody: { content: { "*/*": {} } }, responses } },
           "/a": { get: { operationId: "a/get", responses: ok("job-result") } },
           "/b": { get: { operationId: "b/get", responses: ok("job_result") } },
+          "/rows": {
+            get: {
+              operationId: "rows/list",
+              responses: { 200: { description: "Found.", ...json({ type: "array", items: {
+                type: "object", required: ["id"], properties: { id: { type: "integer" } }, additionalProperties: { type: "string" },
+              } }) } },
+            },
+          },
         },
         components: {
           schemas: {
@@ -439,6 +463,46 @@ describe("gatekeeper-openapi-schema", { timeout: 120_000 }, () => {
       expect(schema).toContain("export type JobResult = {");
       expect(schema).toContain("export type JobResult2 = {");
       expect(schema).toMatch(/path: "\/b";\n\s+response: JobResult2;/);
+      // `[]` would otherwise take the index signature alone.
+      expect(schema).toMatch(/response: \(\{\n\s+id: number;\n\s+\} & \{\n\s+\[key: string\]: string;\n\s+\}\)\[\];/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("aliases an import whose name the group's file declares", () => {
+    const dir = mkdtempSync(join(tmpdir(), "openapi-schema-"));
+    try {
+      const json = (name: string) => ({ content: { "application/json": { schema: { $ref: `#/components/schemas/${name}` } } } });
+      const create = (tag: string, response: string) => ({
+        tags: [tag], operationId: `${tag}/create`, requestBody: { required: true, ...json("UserInput") },
+        responses: { 200: { description: "Made.", ...json(response) } },
+      });
+      // Both groups use `UserInput` and `UsersApi`, so the root declares them, and `users` imports
+      // them beside its own `UserInput`, which is `User` as a request sends it, and its own schema.
+      const spec = {
+        openapi: "3.0.3",
+        info: { title: "Users", version: "1" },
+        paths: { "/users": { post: create("users", "User") }, "/admin/users": { post: create("admin", "UsersApi") },
+          "/users/api": { get: { tags: ["users"], operationId: "users/api", responses: { 200: { description: "Found.", ...json("UsersApi") } } } } },
+        components: {
+          schemas: {
+            User: { type: "object", properties: { id: { type: "string", readOnly: true }, name: { type: "string" } } },
+            UserInput: { type: "object", properties: { name: { type: "string" } } },
+            UsersApi: { type: "object", properties: { version: { type: "string" } } },
+          },
+        },
+      };
+      const file = join(dir, "spec.json");
+      writeFileSync(file, JSON.stringify(spec));
+      const out = join(dir, "out");
+      const result = generate(file, out, "--group-by", "tag");
+      expect(result.status, result.stderr).toBe(0);
+      const users = readTree(out)["users.d.ts"];
+      expect(users).toContain("export type UserInput = {");
+      expect(users).toContain("export type UsersApi = {");
+      expect(users).toContain("body: UserInput$;");
+      expect(users).toContain("response: UsersApi$;");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
