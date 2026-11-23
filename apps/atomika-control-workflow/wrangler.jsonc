@@ -1,0 +1,18 @@
+{
+  // Worker del Workflow de control de ATOMIKA Control OS.
+  // Se despliega con wrangler; el panel lo enlaza con un binding "workflows".
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "atomika-control-flow",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "kv_namespaces": [
+    {
+      "binding": "CTL",
+      "id": "161e6678ccc6498abcb8ab81a5b1d92a",
+      "preview_id": "161e6678ccc6498abcb8ab81a5b1d92a"
+    }
+  ],
+}

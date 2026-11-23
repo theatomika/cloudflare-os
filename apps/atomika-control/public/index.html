@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ATOMIKA Control OS · Dirección</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#131720; --panel2:#181d28; --line:#242b39; --txt:#e7ecf3; --mut:#8d99ad;
+    --ok:#3fb950; --warn:#d29922; --bad:#f85149; --info:#58a6ff; --accent:#7c5cff;
+    --r:14px; --pad:16px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f6; --line:#dfe3ea; --txt:#141821; --mut:#5b6675;
+      --ok:#1a7f37; --warn:#9a6700; --bad:#cf222e; --info:#0969da; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
+  header{position:sticky;top:0;z-index:5;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding:12px var(--pad);background:color-mix(in srgb,var(--panel) 88%, transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  h1{font-size:16px;margin:0;font-weight:650;letter-spacing:-.01em}
+  .brand{display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  .meta{color:var(--mut);font-size:12px}
+  .spacer{flex:1}
+  button{font:inherit;color:var(--txt);background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:7px 12px;cursor:pointer}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  main{padding:var(--pad);max-width:1400px;margin:0 auto}
+  .grid{display:grid;gap:var(--pad);grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;min-width:0}
+  .card h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:650}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv span:first-child{color:var(--mut)}
+  .kv span:last-child{text-align:right;word-break:break-word}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:650;border:1px solid}
+  .s-VERIFICADO,.s-PASS,.s-SUCCEEDED,.s-Available{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+  .s-NO_VERIFICADO,.s-NO\\ VERIFICADO{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+  .s-FAIL,.s-REJECTED,.s-FAILED{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent);background:color-mix(in srgb,var(--bad) 12%,transparent)}
+  .s-RUNNING,.s-AWAITING_APPROVAL,.s-InProgress{color:var(--info);border-color:color-mix(in srgb,var(--info) 45%,transparent);background:color-mix(in srgb,var(--info) 12%,transparent)}
+  ul{list-style:none;margin:0;padding:0}
+  li{padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  li:last-child{border-bottom:0}
+  a{color:var(--info)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mut)}
+  .form{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  textarea,input{font:inherit;background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:9px;padding:9px 10px;width:100%}
+  textarea{min-height:74px;resize:vertical}
+  label.chk{display:flex;gap:8px;align-items:center;color:var(--mut);font-size:13px}
+  label.chk input{width:auto}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .small{font-size:12px;color:var(--mut)}
+  .full{grid-column:1/-1}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12px}
+  .scroll{max-height:320px;overflow:auto}
+  @media (max-width:520px){ .grid{grid-template-columns:1fr} header{padding:10px 12px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span><h1>ATOMIKA Control OS</h1></div>
+  <span class="meta" id="who">identidad: —</span>
+  <span class="spacer"></span>
+  <span class="meta" id="when">—</span>
+  <button id="refresh">Refrescar</button>
+</header>
+
+<main>
+  <div class="grid">
+    <section class="card">
+      <h2>Decisión pendiente</h2>
+      <div id="decision">—</div>
+      <div class="form">
+        <label class="chk"><input type="checkbox" id="reqApproval" /> Requiere aprobación humana</label>
+        <textarea id="instruction" placeholder="Tarea para el ejecutor real (ACP → DeepSeek Harness)"></textarea>
+        <div class="row">
+          <button class="primary" id="launch">Lanzar tarea</button>
+          <span class="small" id="launchOut"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Estado del sistema</h2>
+      <div id="sys">—</div>
+    </section>
+
+    <section class="card">
+      <h2>GitHub · código y SHA</h2>
+      <div id="github">—</div>
+    </section>
+
+    <section class="card">
+      <h2>Agentes y runs · Multica</h2>
+      <div id="multica">—</div>
+    </section>
+
+    <section class="card">
+      <h2>Piloto · T3 / DeepSeek Harness</h2>
+      <div id="pilot">—</div>
+    </section>
+
+    <section class="card">
+      <h2>Cloudflare · workflows y acceso</h2>
+      <div id="cf">—</div>
+    </section>
+
+    <section class="card full">
+      <h2>Linear · issues de control</h2>
+      <div class="scroll" id="linear">—</div>
+    </section>
+
+    <section class="card full">
+      <h2>Tareas y checkpoints del Workflow</h2>
+      <div class="scroll" id="tasks">—</div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pill = (s) => `<span class="pill s-${esc(String(s).replace(/[^A-Za-z_]/g, ""))}">${esc(s)}</span>`;
+const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><span>${v}</span></div>`;
+
+async function load() {
+  $("when").textContent = "actualizado " + new Date().toLocaleTimeString();
+  let s;
+  try {
+    s = await (await fetch("/api/state")).json();
+  } catch (e) {
+    $("sys").innerHTML = `<div class="small">No se pudo leer /api/state: ${esc(e)}</div>`;
+    return;
+  }
+  $("who").textContent = "identidad: " + (s.identity?.email || "(sin Access)");
+
+  // decisión pendiente + sistema
+  const lin = s.linear?.issues || [];
+  const gates = lin.map((i) => {
+    const body = (i.last_comment || "").toLowerCase();
+    const m = body.match(/\b(verificado|no verificado|pass|fail|review)\b/);
+    return { id: i.identifier, title: i.title, state: i.state, verdict: m ? m[1].toUpperCase() : null, url: i.url };
+  });
+  $("decision").innerHTML =
+    `<div class="small">Gates con estado declarado en el último comentario de Linear</div>` +
+    gates.map((g) => kv(g.id, `${pill(g.verdict || g.state)} <a href="${g.url}" target="_blank" rel="noopener">${esc(g.title).slice(0, 42)}</a>`)).join("") ||
+    `<div class="small">sin datos</div>`;
+
+  const sys = $("sys");
+  sys.innerHTML =
+    kv("Workflow (autoridad durable)", s.cloudflare?.workflows?.length ? s.cloudflare.workflows.map((w) => esc(w.name)).join(", ") : pill("NO VERIFICADO")) +
+    kv("Instancias de workflow", s.cloudflare?.workflows?.length ? pill(s.cloudflare.workflows.length) : "—") +
+    kv("Tareas registradas", pill((s.tasks || []).length)) +
+    kv("Coste monetario", pill("NO MEDIDO")) +
+    kv("Piloto conectado", s.pilot?.ok ? pill("Available") : pill("NO VERIFICADO"));
+
+  const gh = s.github || {};
+  $("github").innerHTML =
+    kv("Repo", gh.repo ? `<a href="https://github.com/${gh.repo}" target="_blank" rel="noopener">${esc(gh.repo)}</a>` : "—") +
+    kv("Rama", `<code>${esc(gh.branch || "—")}</code>`) +
+    kv("HEAD", gh.head ? `<code>${esc((gh.head.sha || "").slice(0, 12))}</code> ${esc((gh.head.message || "").slice(0, 40))}` : "—") +
+    kv("Último push", esc(gh.pushed_at || "—")) +
+    kv("CI del HEAD", (gh.check_runs || []).length ? gh.check_runs.map((c) => `${esc(c.name)}: ${esc(c.conclusion || c.status)}`).join("<br>") : "sin checks") +
+    kv("PRs abiertos", (gh.open_prs || []).length ? gh.open_prs.map((p) => `<a href="${p.url}" target="_blank" rel="noopener">#${p.number}</a>`).join(", ") : "ninguno");
+
+  const mu = s.multica || {};
+  $("multica").innerHTML =
+    `<ul>` + (mu.issues || []).map((i) => `<li>${pill(i.status)} <strong>${esc(i.identifier)}</strong> ${esc((i.title || "").slice(0, 46))}</li>`).join("") + `</ul>` +
+    (mu.agents ? `<div class="small" style="margin-top:8px">${mu.agents.length} agentes en el workspace</div>` : "");
+
+  const p = s.pilot || {};
+  $("pilot").innerHTML =
+    kv("Estado", p.ok ? pill("Available") : pill("NO VERIFICADO")) +
+    kv("Hilos T3", p.t3?.threads ?? "—") +
+    kv("Mensajes T3", p.t3?.messages ?? "—") +
+    kv("Sesiones DSH", p.dsh?.sessions ?? "—") +
+    kv("Evidencia (sha256)", p.evidence ? `<code>${esc(p.evidence.sha256.slice(0, 16))}…</code>` : "—") +
+    kv("Efectos externos", p.effects ?? "—") +
+    kv("Publicado", esc(p.fetched_at || "—")) +
+    kv("T3 privado", `<a href="https://t3.atomika.dev" target="_blank" rel="noopener">t3.atomika.dev</a>`);
+
+  const cf = s.cloudflare || {};
+  $("cf").innerHTML =
+    kv("Cuenta", `<code>${esc((cf.account || "").slice(0, 10))}…</code>`) +
+    kv("Workers", (cf.workers || []).length) +
+    kv("Workflows", (cf.workflows || []).length) +
+    kv("Apps de Access (ATOMIKA)", (cf.access_apps || []).map((a) => esc(a.domain)).join("<br>") || "—");
+
+  $("linear").innerHTML = lin.length
+    ? `<table><tr><th>Issue</th><th>Estado</th><th>Título</th><th>Último comentario</th></tr>` +
+      lin.map((i) => `<tr><td><a href="${i.url}" target="_blank" rel="noopener">${esc(i.identifier)}</a></td><td>${pill(i.state)}</td><td>${esc((i.title || "").slice(0, 46))}</td><td class="small">${esc((i.last_comment || "").slice(0, 150))}</td></tr>`).join("") +
+      `</table>`
+    : `<div class="small">${esc(s.linear?.error || "sin datos")}</div>`;
+
+  const tasks = s.tasks || [];
+  $("tasks").innerHTML = tasks.length
+    ? `<table><tr><th>Task</th><th>Estado</th><th>Checkpoint</th><th>Artefacto</th><th>SHA / commit</th></tr>` +
+      tasks.map((t) => {
+        const cp = (s.checkpoints || {})[t.task_id] || {};
+        return `<tr><td><code>${esc(t.task_id)}</code></td><td>${pill(t.status)}</td><td>${pill(cp.status || "—")}</td><td>${esc(cp.artifact || "—")}</td><td class="small"><code>${esc((cp.sha256 || "").slice(0, 12))}</code> ${esc((cp.commit || "").slice(0, 40))}</td></tr>`;
+      }).join("") + `</table>`
+    : `<div class="small">sin tareas todavía</div>`;
+}
+
+$("refresh").addEventListener("click", load);
+$("launch").addEventListener("click", async () => {
+  const instruction = $("instruction").value.trim();
+  if (!instruction) { $("launchOut").textContent = "escribe una instrucción"; return; }
+  $("launch").disabled = true; $("launchOut").textContent = "lanzando…";
+  try {
+    const r = await fetch("/api/tasks", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instruction, require_approval: $("reqApproval").checked }),
+    });
+    const j = await r.json();
+    $("launchOut").textContent = r.ok ? `tarea ${j.task_id} · instancia ${j.instance_id}` : `error: ${j.error || r.status}`;
+    if (r.ok) { $("instruction").value = ""; setTimeout(load, 1500); }
+  } catch (e) { $("launchOut").textContent = "error: " + e; }
+  $("launch").disabled = false;
+});
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>

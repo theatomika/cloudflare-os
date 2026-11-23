@@ -1,0 +1,35 @@
+{
+  // Panel de dirección de ATOMIKA Control OS (Cloudflare OS base · fork theatomika/cloudflare-os)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "atomika-control-os",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  // Dominio propio: el hostname canónico de la aplicación (protegido por Cloudflare Access).
+  // workers.dev se mantiene SOLO como ruta de máquina (requiere el secreto ADAPTER_KEY y
+  // rechaza toda ruta de dirección sin identidad de Access).
+  "routes": [{ "pattern": "control.atomika.dev", "custom_domain": true }],
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CTL",
+      "id": "161e6678ccc6498abcb8ab81a5b1d92a",
+      "preview_id": "161e6678ccc6498abcb8ab81a5b1d92a"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "atomika-control-flow",
+      "binding": "ATOMIKA_CONTROL_FLOW",
+      "class_name": "AtomikaControlFlow"
+    }
+  ],
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "2714b0cae2ff68804b31db1986e7419b"
+  }
+}
