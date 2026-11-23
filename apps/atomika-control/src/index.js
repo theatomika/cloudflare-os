@@ -87,30 +87,38 @@ function requireIdentity(identity) {
 
 async function linearState(env) {
   if (!env.LINEAR_API_KEY) return { ok: false, error: "sin credencial Linear" };
-  const query = `query($ids:[String!]!){ issues(filter:{id:{in:$ids}}){ nodes{ identifier title state{ name type } updatedAt url
-      comments(first:1){ nodes{ body createdAt } } } } }`;
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: env.LINEAR_API_KEY },
-    body: JSON.stringify({ query, variables: { ids: LINEAR_ISSUES } }),
-  });
-  if (!res.ok) return { ok: false, error: `linear http ${res.status}` };
-  const data = await res.json();
-  if (data.errors) return { ok: false, error: String(data.errors[0]?.message || "error linear") };
-  const nodes = data?.data?.issues?.nodes || [];
+  const query = `query($id:String!){ issue(id:$id){ identifier title state{ name type } updatedAt url
+      comments(first:1){ nodes{ body createdAt } } } }`;
+  const issues = await Promise.all(
+    LINEAR_ISSUES.map(async (id) => {
+      try {
+        const res = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: env.LINEAR_API_KEY },
+          body: JSON.stringify({ query, variables: { id } }),
+        });
+        const data = await res.json();
+        const n = data?.data?.issue;
+        if (!n) return null;
+        return {
+          identifier: n.identifier,
+          title: n.title,
+          state: n.state?.name,
+          state_type: n.state?.type,
+          updated_at: n.updatedAt,
+          url: n.url,
+          last_comment: (n.comments?.nodes?.[0]?.body || "").slice(0, 400),
+          last_comment_at: n.comments?.nodes?.[0]?.createdAt || null,
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
   return {
     ok: true,
     fetched_at: new Date().toISOString(),
-    issues: nodes.map((n) => ({
-      identifier: n.identifier,
-      title: n.title,
-      state: n.state?.name,
-      state_type: n.state?.type,
-      updated_at: n.updatedAt,
-      url: n.url,
-      last_comment: (n.comments?.nodes?.[0]?.body || "").slice(0, 400),
-      last_comment_at: n.comments?.nodes?.[0]?.createdAt || null,
-    })),
+    issues: issues.filter(Boolean),
   };
 }
 
@@ -162,20 +170,21 @@ async function githubState(env) {
 async function multicaState(env) {
   if (!env.MULTICA_TOKEN) return { ok: false, error: "sin credencial Multica" };
   const headers = { authorization: `Bearer ${env.MULTICA_TOKEN}`, "content-type": "application/json" };
-  const base = "https://api.multica.ai";
+  const base = "https://api.multica.ai/api";
+  const workspace = env.MULTICA_WORKSPACE_ID || "1b869bee-4a67-4d37-8e8e-b82d6e12707f";
   const [issuesRes, agentsRes] = await Promise.all([
-    fetch(`${base}/issues?limit=8`, { headers }),
-    fetch(`${base}/agents`, { headers }),
+    fetch(`${base}/issues?workspace_id=${workspace}&limit=10`, { headers }),
+    fetch(`${base}/agents?workspace_id=${workspace}`, { headers }),
   ]);
-  const out = { ok: true, fetched_at: new Date().toISOString() };
+  const out = { ok: true, fetched_at: new Date().toISOString(), workspace };
   if (issuesRes.ok) {
     const j = await issuesRes.json();
-    const list = Array.isArray(j) ? j : j.issues || [];
-    out.issues = list.slice(0, 8).map((i) => ({
+    const list = Array.isArray(j) ? j : j.issues || j.data || [];
+    out.issues = list.slice(0, 10).map((i) => ({
       identifier: i.identifier,
       title: i.title,
       status: i.status,
-      assignee: i.assignee_name || i.assignee?.name || i.assignee_id || null,
+      assignee: i.assignee_name || (i.assignee && i.assignee.name) || i.assignee_id || null,
       updated_at: i.updated_at,
     }));
   } else {
@@ -183,8 +192,8 @@ async function multicaState(env) {
   }
   if (agentsRes.ok) {
     const j = await agentsRes.json();
-    const list = Array.isArray(j) ? j : j.agents || [];
-    out.agents = list.slice(0, 12).map((a) => ({
+    const list = Array.isArray(j) ? j : j.agents || j.data || [];
+    out.agents = list.slice(0, 14).map((a) => ({
       id: a.id,
       name: a.name,
       model: a.model,
@@ -212,10 +221,29 @@ async function cloudflareState(env) {
     const res = await workflowsRes.json();
     out.workflows = (res.result || []).map((w) => ({
       id: w.id,
-      name: w.workflow_name || w.script_name || w.id,
+      name: w.name || w.workflow_name || w.id,
       created_on: w.created_on,
       modified_on: w.modified_on,
+      instances: [],
     }));
+    // instancias reales del workflow (autoridad durable): estado y terminación
+    for (const w of out.workflows) {
+      try {
+        const instRes = await fetch(`${base}/workflows/${encodeURIComponent(w.name)}/instances?per_page=25`, { headers });
+        if (instRes.ok) {
+          const inst = await instRes.json();
+          w.instances = (inst.result || []).map((i) => ({
+            id: i.id,
+            status: i.status,
+            created_on: i.created_on,
+            terminated_on: i.terminated_on,
+            error: i.error ? String(i.error).slice(0, 120) : null,
+          }));
+        }
+      } catch {
+        /* sin instancias legibles */
+      }
+    }
   }
   if (appsRes.ok) {
     const res = await appsRes.json();
@@ -269,10 +297,17 @@ export default {
     /* --- máquina (adaptador del host) ------------------------------------- */
     if (path.startsWith("/api/machine/")) {
       const bearer = request.headers.get("authorization") || "";
-      if (!env.ADAPTER_KEY || bearer !== `Bearer ${env.ADAPTER_KEY}`) {
+      const readOnly = Boolean(env.READ_KEY) && bearer === `Bearer ${env.READ_KEY}`;
+      const machine = Boolean(env.ADAPTER_KEY) && bearer === `Bearer ${env.ADAPTER_KEY}`;
+      if (!readOnly && !machine) {
         return json(401, { error: "no autorizado" });
       }
+      // La credencial de solo lectura NO puede despachar ni escribir resultados.
+      if (readOnly && request.method !== "GET") {
+        return json(403, { error: "credencial de solo lectura" });
+      }
       if (path === "/api/machine/state" && request.method === "GET") {
+        // Solo lectura: la usa el revisor independiente para verificar el estado real.
         const [linear, github, multica, cloudflare, pilot, tasks] = await Promise.all([
           linearState(env),
           githubState(env),
