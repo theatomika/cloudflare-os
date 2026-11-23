@@ -120,7 +120,15 @@ export class AtomikaControlFlow extends WorkflowEntrypoint {
 
       const decision = await step.do("approval-decision", async () => {
         const raw = await this.env.CTL.get(`ctl:approval:${taskId}`);
-        return raw ? JSON.parse(raw) : { decision: "timeout" };
+        const parsed = raw ? JSON.parse(raw) : { decision: "timeout" };
+        if (parsed.decision === "approved") {
+          // consumo único: deja constancia de que la aprobación ya se usó
+          await this.env.CTL.put(
+            `ctl:approval:${taskId}`,
+            JSON.stringify({ ...parsed, consumed: true, consumed_at: new Date().toISOString() }),
+          );
+        }
+        return parsed;
       });
       if (decision.decision !== "approved") {
         await step.do("checkpoint-rejected", async () => {

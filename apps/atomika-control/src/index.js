@@ -353,6 +353,19 @@ export default {
             const stale = now - dispatchedAt > 20000; // el ejecutor pudo morir a mitad
             const claimable = rec.state === "pending" || (rec.state === "dispatched" && stale && !hasResult);
             if (claimable) {
+              // Puerta de aprobación: una tarea que exige aprobación humana NO se despacha
+              // al ejecutor hasta que existe una decisión "approved" registrada. El Workflow
+              // es la autoridad, pero el ejecutor tampoco puede adelantarse.
+              if (rec.require_approval) {
+                const approvalRaw = await env[KV].get(`ctl:approval:${rec.task_id}`);
+                let approved = false;
+                try {
+                  approved = Boolean(approvalRaw) && JSON.parse(approvalRaw).decision === "approved";
+                } catch {
+                  approved = false;
+                }
+                if (!approved) continue;
+              }
               const crashFlag = await env[KV].get(`ctl:crash:${rec.task_id}`);
               pending.push({ ...rec, crash: Boolean(crashFlag), reclaimed: rec.state === "dispatched" });
               if (crashFlag) await env[KV].delete(`ctl:crash:${rec.task_id}`);
@@ -508,6 +521,7 @@ export default {
           state: "pending",
           instruction,
           require_approval: requireApproval,
+          idempotency_key: idempotencyKey,
           created_at: new Date().toISOString(),
         }),
       );
@@ -537,6 +551,22 @@ export default {
       const taskId = path.split("/")[3];
       const body = await readJson(request);
       const decision = body.decision === "rejected" ? "rejected" : "approved";
+      // Una aprobación consumida no se puede reutilizar: el Workflow la marca al avanzar.
+      const previousRaw = await env[KV].get(`ctl:approval:${taskId}`);
+      if (previousRaw) {
+        try {
+          const previous = JSON.parse(previousRaw);
+          if (previous.consumed && decision === "approved") {
+            return json(409, {
+              error: "aprobación ya consumida por el Workflow: no puede volver a avanzar la tarea",
+              task_id: taskId,
+              consumed_at: previous.consumed_at || null,
+            });
+          }
+        } catch {
+          /* registro ilegible: se continúa */
+        }
+      }
       await env[KV].put(
         `ctl:approval:${taskId}`,
         JSON.stringify({
